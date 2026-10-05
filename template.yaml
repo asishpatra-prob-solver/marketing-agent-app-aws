@@ -1,0 +1,79 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: Marketing Insight Agent Application
+
+Resources:
+  # ---------------------------------------------------------
+  # Lambdas
+  # ---------------------------------------------------------
+  LoadCampaignData:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/load_campaign_data/
+      Handler: lambda_function.lambda_handler
+      Runtime: python3.14
+      Timeout: 30
+
+  BuildAgentRequest:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/build_agent_request/
+      Handler: lambda_function.lambda_handler
+      Runtime: python3.14
+      Timeout: 30
+
+  ExecuteTool:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/execute_tool/
+      Handler: lambda_function.lambda_handler
+      Runtime: python3.14
+      Timeout: 60
+
+  AppendToolResult:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/append_tool_result/
+      Handler: lambda_function.lambda_handler
+      Runtime: python3.14
+      Timeout: 30
+
+  ExtractFinalAnswer:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/extract_final_answer/
+      Handler: lambda_function.lambda_handler
+      Runtime: python3.14
+      Timeout: 30
+
+  # ---------------------------------------------------------
+  # Step Function
+  # ---------------------------------------------------------
+  MarketingAgentStateMachine:
+    Type: AWS::Serverless::StateMachine
+    Properties:
+      DefinitionUri: statemachine/agent_workflow.asl.json
+      DefinitionSubstitutions:
+        BuildAgentRequestLambdaArn: !GetAtt BuildAgentRequest.Arn
+        ExecuteToolLambdaArn: !GetAtt ExecuteTool.Arn
+        AppendToolResultLambdaArn: !GetAtt AppendToolResult.Arn
+        ExtractFinalAnswerLambdaArn: !GetAtt ExtractFinalAnswer.Arn
+        # (You can add LoadCampaignData here if it's integrated into the workflow file later)
+      Policies:
+        - LambdaInvokePolicy:
+            FunctionName: !Ref LoadCampaignData
+        - LambdaInvokePolicy:
+            FunctionName: !Ref BuildAgentRequest
+        - LambdaInvokePolicy:
+            FunctionName: !Ref ExecuteTool
+        - LambdaInvokePolicy:
+            FunctionName: !Ref AppendToolResult
+        - LambdaInvokePolicy:
+            FunctionName: !Ref ExtractFinalAnswer
+        - Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Action: 'bedrock:InvokeModel'
+              Resource: 'arn:aws:bedrock:us-east-1:610331149125:inference-profile/*'
+        - S3CrudPolicy:
+            BucketName: marketing-insight-agent-ap-2026
