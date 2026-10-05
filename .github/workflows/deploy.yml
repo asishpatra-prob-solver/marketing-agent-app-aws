@@ -1,0 +1,41 @@
+name: Deploy Serverless Agent App
+
+on:
+  push:
+    branches:
+      - main                  # Triggers only when code pushes to main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      # Step 1: Download the code onto GitHub's server
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      # Step 2: Set up Python 3.14 on the runner environment
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-python-version: '3.14'
+
+      # Step 3: Install the AWS SAM CLI tool on GitHub's server
+      - name: Set up AWS SAM CLI
+        uses: aws-actions/setup-sam@v2
+
+      # Step 4: Securely log into AWS using your specific account keys
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+
+      # Step 5: Run AWS SAM to compile your Lambdas and Step Function
+      - name: SAM Build
+        run: sam build --use-container
+
+      # Step 6: Deploy everything up to AWS completely automated
+      - name: SAM Deploy
+        run: |
+          sam deploy --no-confirm-changeset --no-fail-on-empty-changeset --stack-name marketing-agent-production --capabilities CAPABILITY_IAM --resolve-s3
