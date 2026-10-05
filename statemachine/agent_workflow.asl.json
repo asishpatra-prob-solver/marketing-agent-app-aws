@@ -1,0 +1,97 @@
+{
+    "Comment": "Marketing Insight Agent - tool-calling loop",
+    "StartAt": "BuildAgentRequest",
+    "States": {
+        "BuildAgentRequest": {
+            "Type": "Task",
+            "Resource": "arn:aws:lambda:us-east-1:610331149125:function:BuildAgentRequest:$LATEST",
+            "Next": "InvokeModel"
+        },
+        "InvokeModel": {
+            "Type": "Task",
+            "Resource": "arn:aws:states:::bedrock:invokeModel",
+            "Parameters": {
+                "ModelId": "arn:aws:bedrock:us-east-1:610331149125:inference-profile/global.anthropic.claude-haiku-4-5-20251001-v1:0",
+                "Body": {
+                    "anthropic_version": "bedrock-2023-05-31",
+                    "max_tokens": 1000,
+                    "system.$": "$.system_prompt",
+                    "tools.$": "$.tools",
+                    "messages.$": "$.messages"
+                }
+            },
+            "ResultPath": "$.bedrock_response",
+            "Next": "CheckToolUse"
+        },
+        "CheckToolUse": {
+            "Type": "Choice",
+            "Choices": [
+                {
+                    "Variable": "$.bedrock_response.Body.stop_reason",
+                    "StringEquals": "tool_use",
+                    "Next": "ExecuteTool"
+                }
+            ],
+            "Default": "ExtractFinalAnswer"
+        },
+        "ExecuteTool": {
+            "Type": "Task",
+            "Resource": "arn:aws:lambda:us-east-1:610331149125:function:ExecuteTool:$LATEST",
+            "ResultPath": "$.tool_result",
+            "Next": "AppendToolResult"
+        },
+        "AppendToolResult": {
+            "Type": "Task",
+            "Resource": "arn:aws:states:::lambda:invoke",
+            "OutputPath": "$.Payload",
+            "Parameters": {
+                "Payload.$": "$",
+                "FunctionName": "arn:aws:lambda:us-east-1:610331149125:function:AppendToolResult:$LATEST"
+            },
+            "Retry": [
+                {
+                    "ErrorEquals": [
+                        "Lambda.ServiceException",
+                        "Lambda.AWSLambdaException",
+                        "Lambda.SdkClientException",
+                        "Lambda.TooManyRequestsException"
+                    ],
+                    "IntervalSeconds": 1,
+                    "MaxAttempts": 3,
+                    "BackoffRate": 2,
+                    "JitterStrategy": "FULL"
+                }
+            ],
+            "Next": "InvokeModel"
+        },
+        "ExtractFinalAnswer": {
+            "Type": "Task",
+            "Resource": "arn:aws:lambda:us-east-1:610331149125:function:ExtractFinalAnswer:$LATEST",
+            "Next": "StoreReport"
+        },
+        "StoreReport": {
+            "Type": "Task",
+            "Resource": "arn:aws:states:::aws-sdk:s3:putObject",
+            "Parameters": {
+                "Bucket": "marketing-insight-agent-ap-2026",
+                "Key.$": "States.Format('reports/report_{}.md', $$.Execution.Name)",
+                "Body.$": "$.final_report",
+                "ContentType": "text/markdown"
+            },
+            "ResultPath": "$.s3_result",
+            "Next": "StoreReportHtml"
+        },
+        "StoreReportHtml": {
+            "Type": "Task",
+            "Resource": "arn:aws:states:::aws-sdk:s3:putObject",
+            "Parameters": {
+                "Bucket": "marketing-insight-agent-ap-2026",
+                "Key.$": "States.Format('reports/report_{}.html', $$.Execution.Name)",
+                "Body.$": "$.final_report_html",
+                "ContentType": "text/html"
+            },
+            "ResultPath": "$.s3_html_result",
+            "End": true
+        }
+    }
+}
