@@ -21,6 +21,8 @@ TOOLS = [
 ]
 
 def lambda_handler(event, context):
+    # --- Starting Agent request builder for goal ---
+    print(f"Starting Agent request builder for goal: {event.get('goal')}"
     goal = event["goal"]
     return {
         "system_prompt": SYSTEM_PROMPT,
